@@ -3,9 +3,9 @@ name: "Stage 1 — Basic CI (Startup)"
 # ── Triggers ────────────────────────────────────────────────────
 on:
   push:
-    branches: [stage1]
+    branches: [main]
   pull_request:
-    branches: [stage1]
+    branches: [main]
 
 # ── Jobs ────────────────────────────────────────────────────────
 jobs:
