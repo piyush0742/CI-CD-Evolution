@@ -3,55 +3,53 @@ name: "Stage 2 — Optimized CI (Growing Startup)"
 # ── Triggers ────────────────────────────────────────────────────
 on:
   push:
-    branches: [stage-2]
+    branches: [stage2]
   pull_request:
-    branches: [stage-2]
+    branches: [stage2]
 
 # ── Environment Variables ────────────────────────────────────────
 env:
-  REGISTRY: ghcr.io                                      # GitHub Container Registry
-  IMAGE_NAME: ${{ github.repository }}                   # e.g. piyush0742/ci-cd-evolution
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 # ── Jobs ────────────────────────────────────────────────────────
 jobs:
 
   # ── Job 1: Lint ─────────────────────────────────────────────
-  # Runs in PARALLEL with test job
   lint:
     name: Lint
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2        # ✅ updated
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4.4.0      # ✅ updated
         with:
           node-version: "20"
-          cache: "npm"                 # ✅ NEW: cache npm dependencies
+          cache: "npm"
 
       - name: Install dependencies
-        run: npm ci                    # faster than npm install in CI
+        run: npm ci
 
       - name: Run lint
         run: npx eslint src/ --ext .js || true
 
   # ── Job 2: Test ─────────────────────────────────────────────
-  # Runs in PARALLEL with lint job
   test:
     name: Test
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2        # ✅ updated
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4.4.0      # ✅ updated
         with:
           node-version: "20"
-          cache: "npm"                 # ✅ NEW: cache npm dependencies
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -60,53 +58,47 @@ jobs:
         run: ./node_modules/.bin/jest --coverage
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2  # ✅ updated
         with:
           name: coverage-report
           path: coverage/
           retention-days: 7
 
   # ── Job 3: Build & Push ─────────────────────────────────────
-  # Only runs after BOTH lint and test pass
   build-and-push:
     name: Build & Push to GHCR
     runs-on: ubuntu-latest
-    needs: [lint, test]              # ✅ NEW: waits for both parallel jobs
+    needs: [lint, test]
 
-    # Only push image on main branch (not on PRs)
     if: github.ref == 'refs/heads/main'
 
     permissions:
       contents: read
-      packages: write                # needed to push to GHCR
+      packages: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2        # ✅ updated
 
-      # ✅ NEW: Setup Docker Buildx (enables layer caching)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ✅ NEW: Login to GitHub Container Registry
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}  # auto-provided by GitHub
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ✅ NEW: Generate image tags automatically
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,prefix=sha-           # e.g. sha-abc1234
-            type=raw,value=latest          # always tag latest on main
+            type=sha,prefix=sha-
+            type=raw,value=latest
 
-      # ✅ NEW: Build with layer caching + push to GHCR
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -117,10 +109,9 @@ jobs:
           build-args: |
             GIT_COMMIT=${{ github.sha }}
             BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          cache-from: type=gha           # ✅ read cache from GitHub Actions
-          cache-to: type=gha,mode=max    # ✅ write cache to GitHub Actions
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      # ✅ NEW: Smoke test the pushed image
       - name: Smoke test
         run: |
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
