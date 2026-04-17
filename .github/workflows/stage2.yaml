@@ -3,9 +3,9 @@ name: "Stage 2 — Optimized CI (Growing Startup)"
 # ── Triggers ────────────────────────────────────────────────────
 on:
   push:
-    branches: [stage2]
+    branches: [stage-2]
   pull_request:
-    branches: [stage2]
+    branches: [stage-2]
 
 # ── Environment Variables ────────────────────────────────────────
 env:
