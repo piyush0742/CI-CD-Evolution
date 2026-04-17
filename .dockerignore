@@ -1,0 +1,21 @@
+# Dependencies (will be reinstalled inside container)
+node_modules/
+
+# Test files (not needed in production image)
+tests/
+coverage/
+
+# Environment files (secrets should never go in an image)
+.env
+.env.*
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
