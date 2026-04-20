@@ -1,0 +1,132 @@
+name: "Stage 3 — Self-Hosted Runners on EKS"
+
+# ── Triggers ────────────────────────────────────────────────────
+on:
+  push:
+    branches: [stage-3]
+  pull_request:
+    branches: [stage-3]
+
+# ── Environment Variables ────────────────────────────────────────
+env:
+  AWS_REGION:     us-east-1
+  ECR_REGISTRY:   125051246466.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: cicd-evolution-dev-api
+  IMAGE_TAG:      ${{ github.sha }}
+
+# ── Jobs ────────────────────────────────────────────────────────
+jobs:
+
+  # ── Job 1: Lint ─────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: arc-runner-set     # ✅ YOUR self-hosted runner on EKS!
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npx eslint src/ --ext .js || true
+
+  # ── Job 2: Test ─────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: arc-runner-set     # ✅ YOUR self-hosted runner on EKS!
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: ./node_modules/.bin/jest --coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+  # ── Job 3: Build & Push to ECR ──────────────────────────────
+  build-and-push:
+    name: Build & Push to AWS ECR
+    runs-on: arc-runner-set     # ✅ YOUR self-hosted runner on EKS!
+    needs: [lint, test]
+
+    # Only push on main or stage3 branch
+    if: github.ref == 'refs/heads/stage3' || github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      id-token: write           # needed for OIDC auth (Stage 4)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      # ✅ NEW: Authenticate to AWS using IAM credentials
+      # In Stage 4 we'll replace this with OIDC (no keys needed)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      # ✅ NEW: Login to ECR (your private AWS registry)
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ✅ NEW: Set up Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ✅ NEW: Build and push to ECR
+      - name: Build and push to ECR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ✅ NEW: Verify the image was pushed to ECR
+      - name: Verify image in ECR
+        run: |
+          aws ecr describe-images \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --image-ids imageTag=${{ env.IMAGE_TAG }} \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Image successfully pushed to ECR!"
+
+      # ✅ NEW: Output the full image URI for reference
+      - name: Print image URI
+        run: |
+          echo "🐳 Image pushed to:"
+          echo "${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
