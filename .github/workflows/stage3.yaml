@@ -72,8 +72,8 @@ jobs:
     runs-on: arc-runner-set     # ✅ YOUR self-hosted runner on EKS!
     needs: [lint, test]
 
-    # Only push on main or stage3 branch
-    if: github.ref == 'refs/heads/stage3' || github.ref == 'refs/heads/main'
+    # Always run this job (lint and test are the gates via "needs")
+    if: always() && needs.lint.result == 'success' && needs.test.result == 'success'
 
     permissions:
       contents: read
