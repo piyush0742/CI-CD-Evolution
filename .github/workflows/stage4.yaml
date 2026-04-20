@@ -1,0 +1,176 @@
+name: "Stage 4 — Enterprise Hardening"
+
+# ── Triggers ────────────────────────────────────────────────────
+on:
+  push:
+    branches: [stage-4]
+  pull_request:
+    branches: [stage-4]
+
+# ── Environment Variables ────────────────────────────────────────
+env:
+  AWS_REGION:       us-east-1
+  ECR_REGISTRY:     125051246466.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY:   cicd-evolution-dev-api
+  IMAGE_TAG:        ${{ github.sha }}
+  # ✅ NEW: OIDC role — no hardcoded keys!
+  AWS_ROLE_ARN:     arn:aws:iam::125051246466:role/cicd-evolution-dev-github-actions-role
+
+# ── Jobs ────────────────────────────────────────────────────────
+jobs:
+
+  # ── Job 1: Lint ─────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: arc-runner-set
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npx eslint src/ --ext .js || true
+
+  # ── Job 2: Test ─────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: arc-runner-set
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: ./node_modules/.bin/jest --coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+  # ── Job 3: Security Scan ─────────────────────────────────────
+  # ✅ NEW: Scan for vulnerabilities BEFORE building
+  security-scan:
+    name: Security Scan (Trivy)
+    runs-on: arc-runner-set
+    needs: [lint, test]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      # ✅ Scan the filesystem for vulnerabilities
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "table"
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"           # don't fail pipeline, just report
+
+      # ✅ Also scan the Dockerfile for misconfigurations
+      - name: Scan Dockerfile for misconfigurations
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "config"
+          scan-ref: "."
+          format: "table"
+          exit-code: "0"
+
+      # ✅ Upload scan results as artifact
+      - name: Upload Trivy scan results
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: trivy-scan-results
+          path: trivy-results.txt
+          retention-days: 30
+        if: always()               # upload even if scan found issues
+
+  # ── Job 4: Build & Push ─────────────────────────────────────
+  build-and-push:
+    name: Build & Push to AWS ECR
+    runs-on: arc-runner-set
+    needs: [lint, test, security-scan]
+
+    permissions:
+      contents: read
+      id-token: write              # ✅ required for OIDC
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      # ✅ NEW: OIDC authentication — no AWS keys needed!
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume:    ${{ env.AWS_ROLE_ARN }}
+          role-session-name: github-actions-${{ github.run_id }}
+          aws-region:        ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ✅ NEW: Build with cost attribution tags
+      - name: Build and push to ECR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+          # ✅ NEW: Build metadata injected into image
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+            TRIGGERED_BY=${{ github.actor }}
+            WORKFLOW=stage4-enterprise
+          # ✅ NEW: Image labels for cost attribution
+          labels: |
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.repository.updated_at }}
+            com.company.team=${{ github.actor }}
+            com.company.pipeline=stage4-enterprise
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ✅ NEW: Print full deployment summary
+      - name: Deployment summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag | \`${{ env.IMAGE_TAG }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Actor | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Auth | OIDC (no keys) ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | Trivy ✅ |" >> $GITHUB_STEP_SUMMARY

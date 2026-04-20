@@ -34,3 +34,8 @@ output "kubeconfig_command" {
   description = "Run this to connect kubectl to your cluster"
   value       = "aws eks update-kubeconfig --region ${var.region} --name ${module.eks.cluster_name}"
 }
+
+output "github_actions_role_arn" {
+  description = "IAM role ARN for GitHub Actions OIDC — use in workflow"
+  value       = aws_iam_role.github_actions.arn
+}

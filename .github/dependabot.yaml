@@ -1,0 +1,30 @@
+version: 2
+
+updates:
+  # ── GitHub Actions ──────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+
+  # ── npm dependencies ────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "chore"
+    # Only update patch and minor versions automatically
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
