@@ -2,3 +2,19 @@ node_modules/
 coverage/
 .env
 .DS_Store
+
+# Terraform
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/tfplan
+infra/plan.txt
+*.tfstate
+*.tfstate.backup
+
+# Terraform
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/tfplan
+infra/plan.txt
+*.tfstate
+*.tfstate.backup
