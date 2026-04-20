@@ -39,3 +39,13 @@ output "github_actions_role_arn" {
   description = "IAM role ARN for GitHub Actions OIDC — use in workflow"
   value       = aws_iam_role.github_actions.arn
 }
+
+output "grafana_access_command" {
+  description = "Run this to access Grafana locally"
+  value       = "kubectl port-forward svc/kube-prometheus-stack-grafana 3001:80 -n monitoring"
+}
+
+output "grafana_credentials" {
+  description = "Grafana login credentials"
+  value       = "Username: admin | Password: cicd-evolution-admin"
+}
