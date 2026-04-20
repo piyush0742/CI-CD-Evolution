@@ -6,8 +6,6 @@ A hands-on project demonstrating how CI/CD pipelines evolve as a company grows â
 
 ## What Is This Project?
 
-Most developers know how to write code. Fewer know how to **ship it reliably at scale.**
-
 This project uses a simple Node.js/Express REST API as the foundation and demonstrates **4 stages of CI/CD maturity** â€” from a zero-config startup pipeline all the way to an enterprise-grade setup running on AWS EKS with self-hosted runners, OIDC authentication, security scanning, and real-time observability.
 
 Same app. Same goal. The "engine room" gets more powerful at each stage.
