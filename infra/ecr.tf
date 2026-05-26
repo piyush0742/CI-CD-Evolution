@@ -3,11 +3,13 @@
 # Private Docker image registry
 ############################################
 resource "aws_ecr_repository" "app" {
-  name                 = "${local.name}-api"
-  image_tag_mutability = "MUTABLE"
+  name = "${local.name}-api"
+  # IMMUTABLE prevents overwriting existing tags — forces unique tags
+  # (typically the git SHA) and removes "why did prod change silently" mysteries.
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
-    scan_on_push = true   # scans every pushed image for vulnerabilities
+    scan_on_push = true # scans every pushed image for vulnerabilities
   }
 
   tags = local.tags

@@ -41,10 +41,16 @@ resource "aws_iam_role_policy" "arc_runner_ecr" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      # GetAuthorizationToken is an account-level action and requires "*"
+      {
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      # All other ECR actions scoped to just our app's repository
       {
         Effect = "Allow"
         Action = [
-          "ecr:GetAuthorizationToken",
           "ecr:BatchCheckLayerAvailability",
           "ecr:GetDownloadUrlForLayer",
           "ecr:BatchGetImage",
@@ -54,7 +60,7 @@ resource "aws_iam_role_policy" "arc_runner_ecr" {
           "ecr:PutImage",
           "ecr:DescribeRepositories"
         ]
-        Resource = "*"
+        Resource = aws_ecr_repository.app.arn
       }
     ]
   })
